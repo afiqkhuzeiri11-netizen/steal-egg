@@ -1,0 +1,454 @@
+repeat task.wait() until game:IsLoaded()
+
+local Players = game:GetService("Players")
+local Workspace = game:GetService("Workspace")
+local TweenService = game:GetService("TweenService")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local VirtualUser = game:GetService("VirtualUser")
+local LocalPlayer = Players.LocalPlayer
+
+-- Aman untuk berbagai executor (Delta, Fluxus, dll.)
+local ParentGui = (gethui and gethui()) or game:GetService("CoreGui")
+if ParentGui:FindFirstChild("ModernEggHub") then
+    ParentGui.ModernEggHub:Destroy()
+end
+
+-- Pengaturan Utama
+local Config = {
+    AutoFarm = false,
+    UseTween = true,
+    Noclip = true,
+    ESP = false,
+    SpeedBoost = false,
+    AntiAFK = true,
+    TweenSpeed = 65,
+    WalkSpeed = 85,
+    Keyword = "egg"
+}
+
+local EggCache = {}
+
+-- ==========================================
+-- 1. SISTEM DRAG MODERN (SUPPORT HP & PC)
+-- ==========================================
+local function makeDraggable(topBar, mainFrame)
+    local dragging, dragInput, dragStart, startPos
+
+    topBar.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = true
+            dragStart = input.Position
+            startPos = mainFrame.Position
+
+            input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then
+                    dragging = false
+                end
+            end)
+        end
+    end)
+
+    topBar.InputChanged:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+            dragInput = input
+        end
+    end)
+
+    UserInputService.InputChanged:Connect(function(input)
+        if input == dragInput and dragging then
+            local delta = input.Position - dragStart
+            TweenService:Create(mainFrame, TweenInfo.new(0.08, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+                Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+            }):Play()
+        end
+    end)
+end
+
+-- ==========================================
+-- 2. PEMBUATAN GUI MODERN (CYBER DARK THEME)
+-- ==========================================
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "ModernEggHub"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.Parent = ParentGui
+
+-- Tombol Mengambang (Muncul saat di-minimize)
+local FloatBtn = Instance.new("TextButton")
+FloatBtn.Parent = ScreenGui
+FloatBtn.Size = UDim2.new(0, 50, 0, 50)
+FloatBtn.Position = UDim2.new(0.05, 0, 0.2, 0)
+FloatBtn.BackgroundColor3 = Color3.fromRGB(20, 22, 30)
+FloatBtn.Font = Enum.Font.GothamBold
+FloatBtn.Text = "EGG"
+FloatBtn.TextColor3 = Color3.fromRGB(0, 220, 255)
+FloatBtn.TextSize = 13
+FloatBtn.Visible = false
+Instance.new("UICorner", FloatBtn).CornerRadius = UDim.new(1, 0)
+
+local FloatStroke = Instance.new("UIStroke", FloatBtn)
+FloatStroke.Color = Color3.fromRGB(0, 200, 255)
+FloatStroke.Thickness = 2
+makeDraggable(FloatBtn, FloatBtn)
+
+-- Frame Utama
+local MainFrame = Instance.new("Frame")
+MainFrame.Parent = ScreenGui
+MainFrame.BackgroundColor3 = Color3.fromRGB(18, 20, 28)
+MainFrame.Position = UDim2.new(0.5, -140, 0.5, -165)
+MainFrame.Size = UDim2.new(0, 280, 0, 330)
+MainFrame.ClipsDescendants = true
+Instance.new("UICorner", MainFrame).CornerRadius = UDim.new(0, 12)
+
+local MainStroke = Instance.new("UIStroke", MainFrame)
+MainStroke.Thickness = 2
+MainStroke.Color = Color3.fromRGB(255, 255, 255)
+
+local StrokeGradient = Instance.new("UIGradient", MainStroke)
+StrokeGradient.Color = ColorSequence.new({
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(0, 210, 255)),
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(140, 50, 255))
+})
+StrokeGradient.Rotation = 45
+
+-- Header Bar
+local Header = Instance.new("Frame")
+Header.Parent = MainFrame
+Header.BackgroundColor3 = Color3.fromRGB(25, 28, 40)
+Header.Size = UDim2.new(1, 0, 0, 42)
+Header.BorderSizePixel = 0
+Instance.new("UICorner", Header).CornerRadius = UDim.new(0, 12)
+makeDraggable(Header, MainFrame)
+
+local Title = Instance.new("TextLabel")
+Title.Parent = Header
+Title.BackgroundTransparency = 1
+Title.Position = UDim2.new(0, 14, 0, 0)
+Title.Size = UDim2.new(0.7, 0, 1, 0)
+Title.Font = Enum.Font.GothamBold
+Title.Text = "EGG FARMER V2"
+Title.TextColor3 = Color3.fromRGB(245, 245, 255)
+Title.TextSize = 14
+Title.TextXAlignment = Enum.TextXAlignment.Left
+
+local StatusText = Instance.new("TextLabel")
+StatusText.Parent = MainFrame
+StatusText.BackgroundTransparency = 1
+StatusText.Position = UDim2.new(0, 14, 0, 44)
+StatusText.Size = UDim2.new(1, -28, 0, 18)
+StatusText.Font = Enum.Font.Gotham
+StatusText.Text = "Status: Siap Memindai..."
+StatusText.TextColor3 = Color3.fromRGB(0, 215, 255)
+StatusText.TextSize = 11
+StatusText.TextXAlignment = Enum.TextXAlignment.Left
+
+local MinBtn = Instance.new("TextButton")
+MinBtn.Parent = Header
+MinBtn.BackgroundColor3 = Color3.fromRGB(40, 44, 62)
+MinBtn.Position = UDim2.new(1, -36, 0.5, -13)
+MinBtn.Size = UDim2.new(0, 26, 0, 26)
+MinBtn.Font = Enum.Font.GothamBold
+MinBtn.Text = "—"
+MinBtn.TextColor3 = Color3.fromRGB(200, 200, 220)
+MinBtn.TextSize = 12
+Instance.new("UICorner", MinBtn).CornerRadius = UDim.new(0, 6)
+
+-- Kontainer Scroll Fitur
+local Scroll = Instance.new("ScrollingFrame")
+Scroll.Parent = MainFrame
+Scroll.BackgroundTransparency = 1
+Scroll.Position = UDim2.new(0, 10, 0, 66)
+Scroll.Size = UDim2.new(1, -20, 1, -74)
+Scroll.CanvasSize = UDim2.new(0, 0, 0, 280)
+Scroll.ScrollBarThickness = 3
+Scroll.ScrollBarImageColor3 = Color3.fromRGB(0, 210, 255)
+Scroll.BorderSizePixel = 0
+
+local Layout = Instance.new("UIListLayout", Scroll)
+Layout.Padding = UDim.new(0, 8)
+Layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+
+-- Input Kata Kunci Nama Telur
+local InputFrame = Instance.new("Frame")
+InputFrame.Parent = Scroll
+InputFrame.BackgroundColor3 = Color3.fromRGB(26, 29, 42)
+InputFrame.Size = UDim2.new(0.96, 0, 0, 38)
+Instance.new("UICorner", InputFrame).CornerRadius = UDim.new(0, 8)
+
+local InputBox = Instance.new("TextBox")
+InputBox.Parent = InputFrame
+InputBox.BackgroundTransparency = 1
+InputBox.Position = UDim2.new(0, 12, 0, 0)
+InputBox.Size = UDim2.new(1, -24, 1, 0)
+InputBox.Font = Enum.Font.GothamSemibold
+InputBox.PlaceholderText = "Kata Kunci Objek (Default: egg)"
+InputBox.Text = "egg"
+InputBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+InputBox.PlaceholderColor3 = Color3.fromRGB(130, 135, 155)
+InputBox.TextSize = 12
+InputBox.TextXAlignment = Enum.TextXAlignment.Left
+InputBox.ClearTextOnFocus = false
+
+-- Fungsi Toggle Switch Modern dengan Animasi
+local function addModernToggle(titleText, defaultVal, callback)
+    local Row = Instance.new("Frame")
+    Row.Parent = Scroll
+    Row.BackgroundColor3 = Color3.fromRGB(26, 29, 42)
+    Row.Size = UDim2.new(0.96, 0, 0, 40)
+    Instance.new("UICorner", Row).CornerRadius = UDim.new(0, 8)
+
+    local Label = Instance.new("TextLabel")
+    Label.Parent = Row
+    Label.BackgroundTransparency = 1
+    Label.Position = UDim2.new(0, 12, 0, 0)
+    Label.Size = UDim2.new(0.68, 0, 1, 0)
+    Label.Font = Enum.Font.GothamSemibold
+    Label.Text = titleText
+    Label.TextColor3 = Color3.fromRGB(230, 235, 245)
+    Label.TextSize = 12
+    Label.TextXAlignment = Enum.TextXAlignment.Left
+
+    local SwitchBg = Instance.new("TextButton")
+    SwitchBg.Parent = Row
+    SwitchBg.Position = UDim2.new(1, -54, 0.5, -11)
+    SwitchBg.Size = UDim2.new(0, 42, 0, 22)
+    SwitchBg.Text = ""
+    SwitchBg.AutoButtonColor = false
+    Instance.new("UICorner", SwitchBg).CornerRadius = UDim.new(1, 0)
+
+    local Circle = Instance.new("Frame")
+    Circle.Parent = SwitchBg
+    Circle.Size = UDim2.new(0, 16, 0, 16)
+    Circle.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    Instance.new("UICorner", Circle).CornerRadius = UDim.new(1, 0)
+
+    local active = defaultVal
+    local function refresh()
+        local targetColor = active and Color3.fromRGB(0, 200, 120) or Color3.fromRGB(55, 60, 80)
+        local targetPos = active and UDim2.new(1, -19, 0.5, -8) or UDim2.new(0, 3, 0.5, -8)
+        TweenService:Create(SwitchBg, TweenInfo.new(0.2), {BackgroundColor3 = targetColor}):Play()
+        TweenService:Create(Circle, TweenInfo.new(0.2, Enum.EasingStyle.Back), {Position = targetPos}):Play()
+    end
+    refresh()
+
+    SwitchBg.MouseButton1Click:Connect(function()
+        active = not active
+        refresh()
+        callback(active)
+    end)
+end
+
+-- ==========================================
+-- 3. LOGIKA CACHE TELUR & PEMINDAIAN ANTI-LAG
+-- ==========================================
+local function getPart(obj)
+    if obj:IsA("BasePart") then return obj end
+    if obj:IsA("Model") then
+        return obj.PrimaryPart or obj:FindFirstChildWhichIsA("BasePart", true)
+    end
+    return nil
+end
+
+local function isValidEgg(obj)
+    if not obj or not obj.Parent then return false end
+    local char = LocalPlayer.Character
+    if char and obj:IsDescendantOf(char) then return false end
+    if obj:IsA("BasePart") or obj:IsA("Model") then
+        local nameLower = string.lower(obj.Name)
+        if string.find(nameLower, Config.Keyword, 1, true) then
+            return getPart(obj) ~= nil
+        end
+    end
+    return false
+end
+
+local function rebuildCache()
+    table.clear(EggCache)
+    for _, obj in ipairs(Workspace:GetDescendants()) do
+        if isValidEgg(obj) then
+            table.insert(EggCache, obj)
+        end
+    end
+    StatusText.Text = "Telur Terdeteksi: " .. tostring(#EggCache) .. " objek"
+end
+
+InputBox.FocusLost:Connect(function()
+    local txt = string.lower(InputBox.Text):gsub("^%s*(.-)%s*$", "%1")
+    Config.Keyword = (txt ~= "" and txt) or "egg"
+    rebuildCache()
+end)
+
+Workspace.DescendantAdded:Connect(function(obj)
+    task.wait(0.1)
+    if isValidEgg(obj) then
+        table.insert(EggCache, obj)
+        StatusText.Text = "Telur Terdeteksi: " .. tostring(#EggCache) .. " objek"
+    end
+end)
+
+-- Menyusun Tombol ke Dalam GUI
+addModernToggle("Auto Farm Egg", Config.AutoFarm, function(state)
+    Config.AutoFarm = state
+    if state then rebuildCache() else StatusText.Text = "Status: Berhenti (Idle)" end
+end)
+
+addModernToggle("Terbang Halus (Tween)", Config.UseTween, function(state)
+    Config.UseTween = state
+end)
+
+addModernToggle("Auto Noclip (Tembus Tembok)", Config.Noclip, function(state)
+    Config.Noclip = state
+end)
+
+addModernToggle("ESP Egg (Tembus Pandang)", Config.ESP, function(state)
+    Config.ESP = state
+    if not state then
+        for _, obj in ipairs(Workspace:GetDescendants()) do
+            if obj.Name == "ModernEggESP" then obj:Destroy() end
+        end
+    end
+end)
+
+addModernToggle("Speed Boost (Lari Cepat)", Config.SpeedBoost, function(state)
+    Config.SpeedBoost = state
+    local hum = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+    if hum then hum.WalkSpeed = state and Config.WalkSpeed or 16 end
+end)
+
+-- Fungsi Minimize ke Floating Button
+MinBtn.MouseButton1Click:Connect(function()
+    MainFrame.Visible = false
+    FloatBtn.Visible = true
+end)
+
+FloatBtn.MouseButton1Click:Connect(function()
+    FloatBtn.Visible = false
+    MainFrame.Visible = true
+end)
+
+-- ==========================================
+-- 4. EKSEKUSI AUTO FARM, NOCLIP & INTERAKSI
+-- ==========================================
+-- Noclip & Speed Loop
+RunService.Stepped:Connect(function()
+    local char = LocalPlayer.Character
+    if not char then return end
+
+    if Config.AutoFarm and Config.Noclip then
+        for _, part in ipairs(char:GetDescendants()) do
+            if part:IsA("BasePart") and part.CanCollide then
+                part.CanCollide = false
+            end
+        end
+    end
+
+    if Config.SpeedBoost then
+        local hum = char:FindFirstChildOfClass("Humanoid")
+        if hum and hum.WalkSpeed ~= Config.WalkSpeed then
+            hum.WalkSpeed = Config.WalkSpeed
+        end
+    end
+end)
+
+local function collectEgg(egg, rootPart)
+    local part = getPart(egg)
+    if not part then return end
+
+    -- 1. Sentuhan Fisik (TouchInterest)
+    if firetouchinterest then
+        pcall(function()
+            firetouchinterest(rootPart, part, 0)
+            task.wait(0.03)
+            firetouchinterest(rootPart, part, 1)
+        end)
+    end
+
+    -- 2. Tombol Interaksi (ProximityPrompt)
+    local prompt = egg:FindFirstChildWhichIsA("ProximityPrompt", true) or (egg.Parent and egg.Parent:FindFirstChildWhichIsA("ProximityPrompt"))
+    if prompt and fireproximityprompt then
+        pcall(function() fireproximityprompt(prompt) end)
+    end
+
+    -- 3. Klik Objek (ClickDetector)
+    local click = egg:FindFirstChildWhichIsA("ClickDetector", true)
+    if click and fireclickdetector then
+        pcall(function() fireclickdetector(click) end)
+    end
+end
+
+-- Loop Auto Farm Utama
+task.spawn(function()
+    rebuildCache()
+    while task.wait(0.15) do
+        if Config.AutoFarm then
+            pcall(function()
+                local char = LocalPlayer.Character
+                local root = char and char:FindFirstChild("HumanoidRootPart")
+                local hum = char and char:FindFirstChildOfClass("Humanoid")
+                if not root or not hum or hum.Health <= 0 then return end
+
+                local nearestEgg, nearestPart, minDist = nil, nil, math.huge
+
+                for i = #EggCache, 1, -1 do
+                    local egg = EggCache[i]
+                    local part = isValidEgg(egg) and getPart(egg)
+                    if part and part.Parent then
+                        local dist = (root.Position - part.Position).Magnitude
+                        if dist < minDist then
+                            minDist = dist
+                            nearestEgg = egg
+                            nearestPart = part
+                        end
+                    else
+                        table.remove(EggCache, i)
+                    end
+                end
+
+                if nearestEgg and nearestPart then
+                    StatusText.Text = "Mengambil: " .. nearestEgg.Name .. " (" .. math.floor(minDist) .. "m)"
+                    local targetCF = nearestPart.CFrame + Vector3.new(0, 1.5, 0)
+
+                    if Config.UseTween and minDist > 8 then
+                        local duration = math.clamp(minDist / Config.TweenSpeed, 0.08, 3.5)
+                        local tw = TweenService:Create(root, TweenInfo.new(duration, Enum.EasingStyle.Linear), {CFrame = targetCF})
+                        tw:Play()
+                        tw.Completed:Wait()
+                    else
+                        root.CFrame = targetCF
+                    end
+
+                    collectEgg(nearestEgg, root)
+                else
+                    StatusText.Text = "Mencari telur baru di map..."
+                    rebuildCache()
+                    task.wait(1)
+                end
+            end)
+        end
+    end
+end)
+
+-- Loop ESP & Anti-AFK
+task.spawn(function()
+    while task.wait(1.5) do
+        if Config.ESP then
+            for _, egg in ipairs(EggCache) do
+                if egg and egg.Parent and not egg:FindFirstChild("ModernEggESP") then
+                    local hl = Instance.new("Highlight")
+                    hl.Name = "ModernEggESP"
+                    hl.FillColor = Color3.fromRGB(0, 230, 255)
+                    hl.OutlineColor = Color3.fromRGB(255, 255, 255)
+                    hl.FillTransparency = 0.4
+                    hl.Parent = egg
+                end
+            end
+        end
+    end
+end)
+
+LocalPlayer.Idled:Connect(function()
+    if Config.AntiAFK then
+        VirtualUser:CaptureController()
+        VirtualUser:ClickButton2(Vector2.new())
+    end
+end)
